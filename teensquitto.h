@@ -29,13 +29,14 @@
 
 #include "Stream.h"
 #include <SPI.h>
-#include <Wire.h>
 #include <FastLED.h>
 #include <IPAddress.h>
 #include <functional>
 #include <ESPAsyncUDP.h>
-#include <deque>
-#include <queue>
+#include "circular_buffer.h"
+#define TEENSQUITTO_QUEUE_SLOTS 16
+#define TEENSQUITTO_QUEUE_LEN 300
+
 
 #define WakeMode RFMode
 typedef enum {
@@ -516,7 +517,8 @@ class teensquitto : public Stream {
     virtual bool loadPrivateKey(); // WIFICLIENTSECURE
 
   private:
-    static std::deque<std::vector<uint8_t>> teensy_handler_queue;
+    static Circular_Buffer<uint8_t, TEENSQUITTO_QUEUE_SLOTS, TEENSQUITTO_QUEUE_LEN> teensquitto_queue;
+
 
     // ASYNC WEBSOCKETS HANDLER
     static WSCPtr wsc_hndl; // client 

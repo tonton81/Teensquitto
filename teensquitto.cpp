@@ -27,14 +27,13 @@
 #include <teensquitto.h>
 #include "Stream.h"
 #include <SPI.h>
-#include <Wire.h>
 #include <FastLED.h>
 #include <IPAddress.h>
 #include <ESPAsyncUDP.h>
-#include <deque>
-#include <queue>
+#include "circular_buffer.h"
 
-std::deque<std::vector<uint8_t>> teensquitto::teensy_handler_queue;
+
+Circular_Buffer<uint8_t, TEENSQUITTO_QUEUE_SLOTS, TEENSQUITTO_QUEUE_LEN> teensquitto::teensquitto_queue;
 volatile bool teensquitto::_mqtt_online_flag = 0;
 uint8_t teensquitto::_wifi_status = 0;
 Stream* teensquitto::deviceSerial = NULL;
@@ -4335,16 +4334,16 @@ uint8_t teensquitto::events() {
         }
     }
   }
-  if ( !_pendingData && teensy_handler_queue.size() > 0 ) {
-//      uint32_t _count = 0; for ( uint8_t i : teensy_handler_queue.front() ) _count++;
+  if ( !_pendingData && teensquitto_queue.size() > 0 ) {
+//      uint32_t _count = 0; for ( uint8_t i : teensquitto_queue.front() ) _count++;
 //      uint8_t buf[_count];
 //Serial.print("             DeQueing Handler!  Queue size: ");
-//Serial.println(teensy_handler_queue.size() );
+//Serial.println(teensquitto_queue.size() );
      
-    uint32_t _count = 0; for ( uint8_t i : teensy_handler_queue.front() ) _count++;
-    uint8_t *_queue_pointer = &teensy_handler_queue.front()[0];
+    uint32_t _count = teensquitto_queue.length_front(); //for ( uint8_t i : teensquitto_queue.front() ) _count++;
+    uint8_t *_queue_pointer = &teensquitto_queue.front()[0];
   //  Serial.print("PROCESS?: "); for ( uint8_t i = 0; i < _count; i++ ) { Serial.print(_queue_pointer[i]); Serial.print(" "); } Serial.println();
-    processing_data(_queue_pointer, _count); teensy_handler_queue.pop_front();
+    processing_data(_queue_pointer, _count); teensquitto_queue.pop_front();
   }
   return 0;
 }
@@ -4440,8 +4439,7 @@ void teensquitto::processing_data(uint8_t *data, uint32_t len) {
 
     case 0xAFAF: { // ESP8266 MQTT Handlers.
         if ( _pendingData ) {
-          std::vector<uint8_t> _vector (len); std::copy(data, data+len, _vector.begin());
-          teensy_handler_queue.push_back(_vector); return;
+          teensquitto_queue.push_back(data, len); return;
         }
         switch ( data[2] ) {
           case 0x00: {
@@ -4483,8 +4481,7 @@ void teensquitto::processing_data(uint8_t *data, uint32_t len) {
 
     case 0xABAB: { // ESP8266 WIFI Handlers.
         if ( _pendingData ) {
-          std::vector<uint8_t> _vector (len); std::copy(data, data+len, _vector.begin());
-          teensy_handler_queue.push_back(_vector); return;
+          teensquitto_queue.push_back(data, len); return;
         }
         switch ( data[2] ) {
           case 0x00: {
@@ -4598,8 +4595,7 @@ void teensquitto::processing_data(uint8_t *data, uint32_t len) {
       } 
     case 0xCFCF: { // ESP8266 ASYNC UDP HANDLER.
         if ( _pendingData ) {
-          std::vector<uint8_t> _vector (len); std::copy(data, data+len, _vector.begin());
-          teensy_handler_queue.push_back(_vector); return;
+          teensquitto_queue.push_back(data, len); return;
         }
         switch ( data[2] ) {
           case 0x00: {
@@ -4618,8 +4614,7 @@ void teensquitto::processing_data(uint8_t *data, uint32_t len) {
       } 
     case 0xABCD: { // ESP8266 ASYNC WEBSOCKETS
         if ( _pendingData ) {
-          std::vector<uint8_t> _vector (len); std::copy(data, data+len, _vector.begin());
-          teensy_handler_queue.push_back(_vector); return;
+          teensquitto_queue.push_back(data, len); return;
         }
         switch ( data[2] ) {
           case 0x00: { // SERVER HANDLER
@@ -4675,12 +4670,10 @@ teensquitto WiFi = teensquitto("WiFi");
 teensquitto SPIFFS = teensquitto("SPIFFS");
 teensquitto ESP = teensquitto("ESP");
 teensquitto WiFiMulti = teensquitto("WiFiMulti");
-namespace std {
-void __attribute__((weak)) __throw_bad_alloc() {
-  Serial.println("Unable to allocate memory");
-}
-void __attribute__((weak)) __throw_length_error( char const*e ) {
-  Serial.print("Length Error :"); Serial.println(e);
-}
-}
 
+
+namespace std {
+void __attribute__((weak)) __throw_bad_alloc() __attribute__ ((__noreturn__));
+void __attribute__((weak)) __throw_length_error( char const*e) __attribute__ ((__noreturn__));
+void __attribute__((weak)) __throw_bad_function_call(void) __attribute__ ((__noreturn__));
+}
